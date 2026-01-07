@@ -1,16 +1,26 @@
 {
-	"compatibility_date": "2025-10-08",
-	"main": "src/index.ts",
-	"name": "cloudflare-universal-webhook",
-	"upload_source_maps": true,
-	"observability": {
-		"enabled": true
-	},
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "universal-webhook",
-			"database_id": "6b34b44d-57ea-4738-8d20-319e6f57dfd6"
-		}
-	]
+  "compatibility_date": "2025-10-08",
+  "main": "src/index.ts",
+  "name": "cloudflare-universal-webhook",
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "universal-webhook",
+      "database_id": "6b34b44d-57ea-4738-8d20-319e6f57dfd6",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "WEBHOOK_BUCKET",
+      "bucket_name": "webhook-payloads",
+    },
+  ],
+  "vars": {
+    "ALLOWED_IPS": "",
+    "API_TOKEN": "change-me",
+  },
 }

@@ -25,6 +25,10 @@
   ],
   "vars": {
     "ALLOWED_IPS": "",
+    "TURSO_DATABASE_URL": "libsql://universal-webhook-schotek.aws-eu-west-1.turso.io",
   },
-  // No crons needed - KV has automatic TTL expiration
+  // Daily cron for Turso audit log cleanup (30-day retention)
+  "triggers": {
+    "crons": ["0 3 * * *"],
+  },
 }

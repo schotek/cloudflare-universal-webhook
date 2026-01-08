@@ -1,4 +1,5 @@
 import { MiddlewareHandler } from "hono";
+import { getTursoClient, insertAuditLog } from "../lib/turso";
 
 // Extend Hono context to store audit data
 declare module "hono" {
@@ -20,7 +21,7 @@ function formatDate(date: Date): string {
 
 /**
  * Audit logging middleware
- * Logs all requests to KV store (except audit endpoint itself)
+ * Logs all requests to KV store and Turso database (except audit endpoint itself)
  */
 export const auditMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
 	const start = Date.now();
@@ -85,7 +86,34 @@ export const auditMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, n
 	// Log to KV in background (non-blocking) with TTL
 	c.executionCtx.waitUntil(
 		c.env.AUDIT_KV.put(key, JSON.stringify(value), { expirationTtl: AUDIT_TTL }).catch((error) =>
-			console.error("Audit logging failed:", error)
+			console.error("Audit KV logging failed:", error)
 		)
+	);
+
+	// Log to Turso in background (non-blocking)
+	c.executionCtx.waitUntil(
+		(async () => {
+			try {
+				const tursoClient = getTursoClient(c.env);
+				if (!tursoClient) return;
+				await insertAuditLog(tursoClient, {
+					id: uuid,
+					method,
+					path,
+					status_code: statusCode,
+					customer_id: customerId,
+					source_ip: sourceIp,
+					user_agent: userAgent,
+					content_type: contentType,
+					request_size: requestSize,
+					response_time_ms: duration,
+					error_message: errorMessage,
+					webhook_id: webhookId,
+					timestamp: now.toISOString(),
+				});
+			} catch (error) {
+				console.error("Audit Turso logging failed:", error);
+			}
+		})()
 	);
 };

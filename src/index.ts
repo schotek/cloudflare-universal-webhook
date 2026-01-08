@@ -54,7 +54,7 @@ app.get("/manage/audit", s2sAuthentication, listAuditLogs);
 
 // Export worker with scheduled handler for Turso cleanup
 export default {
-	fetch: app.fetch,
+	fetch: (request: Request, env: Env, ctx: ExecutionContext) => app.fetch(request, env, ctx),
 
 	// Scheduled handler for 30-day Turso audit log retention cleanup
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {

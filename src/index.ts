@@ -55,9 +55,19 @@ app.get("/manage/audit", s2sAuthentication, listAuditLogs);
 export default {
 	fetch: app.fetch,
 
-	// Scheduled cleanup - runs daily at 3:00 UTC
+	// Scheduled handlers
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-		const deletedCount = await cleanupAuditLogs(env.DB);
-		console.log(`Audit cleanup: deleted ${deletedCount} records older than 30 days`);
+		// Daily cleanup at 3:00 UTC
+		if (event.cron === "0 3 * * *") {
+			const deletedCount = await cleanupAuditLogs(env.DB);
+			console.log(`Audit cleanup: deleted ${deletedCount} records older than 30 days`);
+			return;
+		}
+
+		// Warm-up ping every 5 minutes - keeps Worker and D1 connection warm
+		if (event.cron === "*/5 * * * *") {
+			await env.DB.prepare("SELECT 1").first();
+			console.log("Warm-up ping completed");
+		}
 	},
 };

@@ -6,6 +6,9 @@
   "observability": {
     "enabled": true,
   },
+  "placement": {
+    "mode": "smart",
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -23,6 +26,6 @@
     "ALLOWED_IPS": "",
   },
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": ["0 3 * * *", "*/5 * * * *"]
   },
 }

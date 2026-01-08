@@ -1,14 +1,17 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ipValidation, tokenAuthentication, s2sAuthentication } from "./middleware/auth";
+import { auditMiddleware, cleanupAuditLogs } from "./middleware/audit";
 import { handleWebhook } from "./endpoints/webhook";
-import { listWebhooks, downloadWebhook, deleteWebhook, listCustomers } from "./endpoints/webhookManagement";
+import { listWebhooks, downloadWebhook, deleteWebhook, listCustomers, listAuditLogs } from "./endpoints/webhookManagement";
 
 const app = new Hono<{ Bindings: Env }>();
 
 // Global error handler
 app.onError((err, c) => {
+	// Store error message for audit logging
 	if (err instanceof HTTPException) {
+		c.set("auditErrorMessage", err.message);
 		return c.json(
 			{
 				success: false,
@@ -19,6 +22,7 @@ app.onError((err, c) => {
 	}
 
 	console.error("Global error handler caught:", err);
+	c.set("auditErrorMessage", "Internal Server Error");
 
 	return c.json(
 		{
@@ -28,6 +32,9 @@ app.onError((err, c) => {
 		500
 	);
 });
+
+// Apply audit middleware to all routes
+app.use("*", auditMiddleware);
 
 // Redirect to main website
 app.get("/", (c) => {
@@ -42,5 +49,15 @@ app.get("/manage/customers", s2sAuthentication, listCustomers);
 app.get("/manage/webhooks", s2sAuthentication, listWebhooks);
 app.get("/manage/webhooks/:webhookId", s2sAuthentication, downloadWebhook);
 app.delete("/manage/webhooks/:webhookId", s2sAuthentication, deleteWebhook);
+app.get("/manage/audit", s2sAuthentication, listAuditLogs);
 
-export default app;
+// Export worker with fetch and scheduled handlers
+export default {
+	fetch: app.fetch,
+
+	// Scheduled cleanup - runs daily at 3:00 UTC
+	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+		const deletedCount = await cleanupAuditLogs(env.DB);
+		console.log(`Audit cleanup: deleted ${deletedCount} records older than 30 days`);
+	},
+};

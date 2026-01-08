@@ -1,0 +1,24 @@
+meta {
+  name: List Audit Logs
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{BASE_URL}}/manage/audit?limit=50
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{S2S_TOKEN}}
+}
+
+params:query {
+  limit: 50
+  ~customer_id: {{CUSTOMER_ID}}
+  ~status_code: 200
+  ~from: 2024-01-01
+  ~to: 2024-12-31
+  ~offset: 0
+}

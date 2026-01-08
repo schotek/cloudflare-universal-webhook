@@ -126,6 +126,7 @@ export const handleWebhook = async (c: Context<{ Bindings: Env }>) => {
 
 	// Generate webhook ID and storage path
 	const webhookId = crypto.randomUUID();
+	c.set("auditWebhookId", webhookId); // For audit logging
 	const dateFolder = formatDate(new Date());
 	const extension = getExtensionFromContentType(contentType);
 

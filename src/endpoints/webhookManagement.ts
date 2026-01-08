@@ -191,3 +191,96 @@ export const listCustomers = async (c: Context<{ Bindings: Env }>) => {
 		...customersData,
 	});
 };
+
+/**
+ * List audit logs
+ * GET /manage/audit?customer_id=xxx&status_code=404&from=2024-01-01&to=2024-01-31&limit=100&offset=0
+ */
+export const listAuditLogs = async (c: Context<{ Bindings: Env }>) => {
+	const customerId = c.req.query("customer_id");
+	const statusCode = c.req.query("status_code");
+	const from = c.req.query("from");
+	const to = c.req.query("to");
+	const limitStr = c.req.query("limit");
+	const offsetStr = c.req.query("offset");
+
+	// Validate date formats
+	const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+	if (from && !dateRegex.test(from)) {
+		throw new HTTPException(400, { message: "Invalid 'from' date format. Use YYYY-MM-DD" });
+	}
+	if (to && !dateRegex.test(to)) {
+		throw new HTTPException(400, { message: "Invalid 'to' date format. Use YYYY-MM-DD" });
+	}
+
+	// Parse limit and offset
+	const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 100, 1), 1000) : 100;
+	const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+
+	// Build query
+	let query = "SELECT * FROM audit_log WHERE 1=1";
+	const params: (string | number)[] = [];
+
+	if (customerId) {
+		query += " AND customer_id = ?";
+		params.push(customerId);
+	}
+
+	if (statusCode) {
+		query += " AND status_code = ?";
+		params.push(parseInt(statusCode, 10));
+	}
+
+	if (from) {
+		query += " AND timestamp >= ?";
+		params.push(from + " 00:00:00");
+	}
+
+	if (to) {
+		query += " AND timestamp <= ?";
+		params.push(to + " 23:59:59");
+	}
+
+	query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+	params.push(limit, offset);
+
+	// Execute query
+	const result = await c.env.DB.prepare(query).bind(...params).all();
+
+	// Get total count for pagination
+	let countQuery = "SELECT COUNT(*) as total FROM audit_log WHERE 1=1";
+	const countParams: (string | number)[] = [];
+
+	if (customerId) {
+		countQuery += " AND customer_id = ?";
+		countParams.push(customerId);
+	}
+
+	if (statusCode) {
+		countQuery += " AND status_code = ?";
+		countParams.push(parseInt(statusCode, 10));
+	}
+
+	if (from) {
+		countQuery += " AND timestamp >= ?";
+		countParams.push(from + " 00:00:00");
+	}
+
+	if (to) {
+		countQuery += " AND timestamp <= ?";
+		countParams.push(to + " 23:59:59");
+	}
+
+	const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>();
+
+	return c.json({
+		success: true,
+		logs: result.results,
+		pagination: {
+			total: countResult?.total || 0,
+			limit,
+			offset,
+			hasMore: offset + limit < (countResult?.total || 0),
+		},
+	});
+};

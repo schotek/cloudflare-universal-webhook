@@ -1,0 +1,23 @@
+meta {
+  name: List Webhooks
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{BASE_URL}}/manage/webhooks?type=esl&limit=100
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{S2S_TOKEN}}
+}
+
+params:query {
+  type: esl
+  limit: 100
+  ~customer_id: customer-123
+  ~date: 2024-01-07
+  ~cursor:
+}

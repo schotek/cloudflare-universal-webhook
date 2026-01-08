@@ -1,0 +1,33 @@
+meta {
+  name: Send JSON Webhook
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{BASE_URL}}/webhook/esl/customer-123
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{API_TOKEN}}
+}
+
+body:json {
+  {
+    "event": "order.created",
+    "orderId": "ORD-12345",
+    "customer": {
+      "id": "CUST-001",
+      "email": "test@example.com"
+    },
+    "items": [
+      {
+        "sku": "PROD-A",
+        "quantity": 2
+      }
+    ],
+    "timestamp": "2024-01-07T12:00:00Z"
+  }
+}

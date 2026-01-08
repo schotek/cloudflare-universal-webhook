@@ -1,0 +1,38 @@
+meta {
+  name: Send XML Webhook
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{BASE_URL}}/webhook/esl/customer-123
+  body: xml
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/xml
+}
+
+auth:bearer {
+  token: {{API_TOKEN}}
+}
+
+body:xml {
+  <?xml version="1.0" encoding="UTF-8"?>
+  <order>
+    <event>order.created</event>
+    <orderId>ORD-12345</orderId>
+    <customer>
+      <id>CUST-001</id>
+      <email>test@example.com</email>
+    </customer>
+    <items>
+      <item>
+        <sku>PROD-A</sku>
+        <quantity>2</quantity>
+      </item>
+    </items>
+    <timestamp>2024-01-07T12:00:00Z</timestamp>
+  </order>
+}

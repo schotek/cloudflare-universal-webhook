@@ -1,17 +1,20 @@
-import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
-import { ContentfulStatusCode } from "hono/utils/http-status";
-import { WebhookReceiver } from "./endpoints/webhook";
-import { ipValidation, tokenAuthentication } from "./middleware/auth";
+import { HTTPException } from "hono/http-exception";
+import { ipValidation, tokenAuthentication, s2sAuthentication } from "./middleware/auth";
+import { handleWebhook } from "./endpoints/webhook";
+import { listWebhooks, downloadWebhook, deleteWebhook } from "./endpoints/webhookManagement";
 
-// Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
 
+// Global error handler
 app.onError((err, c) => {
-	if (err instanceof ApiException) {
+	if (err instanceof HTTPException) {
 		return c.json(
-			{ success: false, errors: err.buildResponse() },
-			err.status as ContentfulStatusCode
+			{
+				success: false,
+				errors: [{ code: err.status, message: err.message }],
+			},
+			err.status
 		);
 	}
 
@@ -26,32 +29,17 @@ app.onError((err, c) => {
 	);
 });
 
-// Setup OpenAPI registry
-const openapi = fromHono(app, {
-	docs_url: "/",
-	schema: {
-		info: {
-			title: "Universal Webhook API",
-			version: "1.0.0",
-			description:
-				"A universal webhook receiver that accepts payloads of any format (JSON, XML, CSV, etc.) and stores them securely in R2 storage. Features IP validation and API token authentication.",
-		},
-		security: [{ bearerAuth: [] }],
-	} as const,
+// Redirect to main website
+app.get("/", (c) => {
+	return c.redirect("https://www.proficenovky.cz/", 302);
 });
 
-// Add security scheme to OpenAPI spec
-openapi.registry.registerComponent("securitySchemes", "bearerAuth", {
-	type: "http",
-	scheme: "bearer",
-	description: "API token - zadejte token bez prefixu 'Bearer'",
-});
+// Webhook route with middleware
+app.post("/webhook/:type/:customer_id", ipValidation, tokenAuthentication, handleWebhook);
 
-// Apply auth middleware to webhook routes
-app.use("/webhook/*", ipValidation, tokenAuthentication);
+// Management routes with middleware
+app.get("/manage/webhooks", s2sAuthentication, listWebhooks);
+app.get("/manage/webhooks/:webhookId", s2sAuthentication, downloadWebhook);
+app.delete("/manage/webhooks/:webhookId", s2sAuthentication, deleteWebhook);
 
-// Register webhook endpoint
-openapi.post("/webhook/:type/:customer_id", WebhookReceiver);
-
-// Export the Hono app
 export default app;

@@ -1,0 +1,25 @@
+meta {
+  name: Send Plain Text Webhook
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{BASE_URL}}/webhook/esl/customer-123
+  body: text
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{API_TOKEN}}
+}
+
+headers {
+  Content-Type: text/plain
+}
+
+body:text {
+  This is a plain text webhook payload.
+  It can contain any text content.
+  Line 3 of the message.
+}

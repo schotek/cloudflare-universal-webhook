@@ -1,0 +1,23 @@
+meta {
+  name: Delete Webhook
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{BASE_URL}}/manage/webhooks/:webhookId?type=esl
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{S2S_TOKEN}}
+}
+
+params:path {
+  webhookId: 1e8cad4b-d5d9-48e4-9d7d-e1f21902d455
+}
+
+params:query {
+  type: esl
+}

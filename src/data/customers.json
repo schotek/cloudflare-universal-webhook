@@ -45,6 +45,7 @@
         "custFeature5": "priceVypDPH",
         "custFeature6": "akce"
       },
+      "expected-header": "ItemCode;CodeBars;U_Vaha;ItemName;Price;Kategorie;Typ;OnHand;SuppCatNum;PriceDPH;MJ2;PriceVyp;PriceVypDPH;Akce",
       "ips": ["217.115.248.138"]
     }
   ]

@@ -21,7 +21,5 @@
   ],
   "vars": {
     "ALLOWED_IPS": "",
-    "CUSTOMER_TOKENS": "{\"customer-123\":\"token-abc\",\"customer-456\":\"token-xyz\"}",
-    "S2S_TOKEN": "secret-token",
   },
 }

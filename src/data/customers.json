@@ -19,8 +19,8 @@
       "zkong-pairs": [{ "mpl-zlin": "1748429260146" }],
       "esl-pairs": {
         "barCode": "CodeBars",
-        "attrCategory": "kategorie",
-        "attrName": "typ",
+        "attrCategory": "Kategorie",
+        "attrName": "Typ",
         "productCode": "ItemCode",
         "productSku": "U_Vaha",
         "itemTitle": "ItemName",

@@ -10,14 +10,14 @@ get {
   auth: bearer
 }
 
-auth:bearer {
-  token: {{S2S_TOKEN}}
-}
-
 params:query {
   type: esl
   limit: 100
-  ~customer_id: customer-123
+  ~customer_id: {{CUSTOMER_ID}}
   ~date: 2024-01-07
-  ~cursor:
+  ~cursor: 
+}
+
+auth:bearer {
+  token: {{S2S_TOKEN}}
 }

@@ -6,7 +6,8 @@
       "description": "Testovací zákazník pro vývoj",
       "active": true,
       "data_format": "all",
-      "outlets": []
+      "outlets": [],
+      "zkong-pairs": []
     },
     {
       "id": "mpl",
@@ -14,7 +15,9 @@
       "description": "MPL s.r.o.",
       "active": true,
       "data_format": "csv",
-      "outlets": ["mpl-zlin"]
+      "outlets": ["mpl-zlin"],
+      "zkong-pairs": [{ "mpl-zlin": "1748429260146" }],
+      "ips": ["217.115.248.138"]
     }
   ]
 }

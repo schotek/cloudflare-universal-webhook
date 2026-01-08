@@ -9,11 +9,12 @@
   "placement": {
     "mode": "smart",
   },
-  "d1_databases": [
+  // KV namespace for audit and delete logs
+  // Create with: wrangler kv:namespace create AUDIT_KV
+  "kv_namespaces": [
     {
-      "binding": "DB",
-      "database_name": "universal-webhook",
-      "database_id": "6b34b44d-57ea-4738-8d20-319e6f57dfd6",
+      "binding": "AUDIT_KV",
+      "id": "a2e5b9574cbd418a9019ae63cf88254f",
     },
   ],
   "r2_buckets": [
@@ -25,7 +26,5 @@
   "vars": {
     "ALLOWED_IPS": "",
   },
-  "triggers": {
-    "crons": ["0 3 * * *", "*/5 * * * *"]
-  },
+  // No crons needed - KV has automatic TTL expiration
 }

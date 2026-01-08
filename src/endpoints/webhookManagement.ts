@@ -5,6 +5,16 @@ import customersData from "../data/customers.json";
 // Valid webhook types
 const VALID_TYPES = ["esl"] as const;
 
+// TTL for delete logs: 90 days in seconds
+const DELETE_LOG_TTL = 90 * 24 * 60 * 60;
+
+/**
+ * Format date as YYYY-MM-DD
+ */
+function formatDate(date: Date): string {
+	return date.toISOString().split("T")[0];
+}
+
 /**
  * Helper function to find webhook key by webhookId
  */
@@ -174,19 +184,28 @@ export const deleteWebhook = async (c: Context<{ Bindings: Env }>) => {
 
 	await c.env.WEBHOOK_BUCKET.delete(key);
 
-	// Log deletion to delete_log table (non-blocking)
+	// Log deletion to KV (non-blocking)
 	const sourceIp =
 		c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || null;
 	const userAgent = c.req.header("User-Agent") || null;
 
+	const now = new Date();
+	const dateStr = formatDate(now);
+	const timestamp = now.getTime();
+	const kvKey = `delete:${dateStr}:${timestamp}:${webhookId}`;
+
+	const deleteLogValue = {
+		webhookId,
+		deletedKey: key,
+		sourceIp,
+		userAgent,
+		timestamp: now.toISOString(),
+	};
+
 	c.executionCtx.waitUntil(
-		c.env.DB.prepare(
-			`INSERT INTO delete_log (webhook_id, deleted_key, source_ip, user_agent)
-			 VALUES (?, ?, ?, ?)`
+		c.env.AUDIT_KV.put(kvKey, JSON.stringify(deleteLogValue), { expirationTtl: DELETE_LOG_TTL }).catch((error) =>
+			console.error("Delete logging failed:", error)
 		)
-			.bind(webhookId, key, sourceIp, userAgent)
-			.run()
-			.catch((error) => console.error("Delete logging failed:", error))
 	);
 
 	return c.json({
@@ -207,9 +226,29 @@ export const listCustomers = async (c: Context<{ Bindings: Env }>) => {
 	});
 };
 
+// Audit log entry type
+interface AuditLogEntry {
+	method: string;
+	path: string;
+	statusCode: number;
+	customerId: string | null;
+	sourceIp: string | null;
+	userAgent: string | null;
+	contentType: string | null;
+	requestSize: number | null;
+	responseTimeMs: number;
+	errorMessage: string | null;
+	webhookId: string | null;
+	timestamp: string;
+}
+
 /**
- * List audit logs
- * GET /manage/audit?customer_id=xxx&status_code=404&from=2024-01-01&to=2024-01-31&limit=100&offset=0
+ * List audit logs from KV
+ * GET /manage/audit?customer_id=xxx&status_code=404&from=2024-01-01&to=2024-01-31&limit=100
+ *
+ * Note: KV doesn't support SQL-like queries, so filtering is done in code.
+ * - from/to: Uses KV prefix listing by date
+ * - customer_id, status_code: Filtered in code after fetching
  */
 export const listAuditLogs = async (c: Context<{ Bindings: Env }>) => {
 	const customerId = c.req.query("customer_id");
@@ -217,7 +256,6 @@ export const listAuditLogs = async (c: Context<{ Bindings: Env }>) => {
 	const from = c.req.query("from");
 	const to = c.req.query("to");
 	const limitStr = c.req.query("limit");
-	const offsetStr = c.req.query("offset");
 
 	// Validate date formats
 	const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -228,74 +266,65 @@ export const listAuditLogs = async (c: Context<{ Bindings: Env }>) => {
 		throw new HTTPException(400, { message: "Invalid 'to' date format. Use YYYY-MM-DD" });
 	}
 
-	// Parse limit and offset
+	// Parse limit
 	const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 100, 1), 1000) : 100;
-	const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
 
-	// Build query
-	let query = "SELECT * FROM audit_log WHERE 1=1";
-	const params: (string | number)[] = [];
+	// Build prefix for KV listing
+	// If from date is specified, start from that date; otherwise list all audit logs
+	const prefix = "audit:";
 
-	if (customerId) {
-		query += " AND customer_id = ?";
-		params.push(customerId);
-	}
+	// Collect logs from KV
+	const logs: AuditLogEntry[] = [];
+	let cursor: string | undefined;
+	const statusCodeNum = statusCode ? parseInt(statusCode, 10) : null;
 
-	if (statusCode) {
-		query += " AND status_code = ?";
-		params.push(parseInt(statusCode, 10));
-	}
+	// Parse date bounds
+	const fromDate = from ? new Date(from + "T00:00:00Z") : null;
+	const toDate = to ? new Date(to + "T23:59:59Z") : null;
 
-	if (from) {
-		query += " AND timestamp >= ?";
-		params.push(from + " 00:00:00");
-	}
+	do {
+		const listResult = await c.env.AUDIT_KV.list({
+			prefix,
+			limit: 1000,
+			cursor,
+		});
 
-	if (to) {
-		query += " AND timestamp <= ?";
-		params.push(to + " 23:59:59");
-	}
+		for (const key of listResult.keys) {
+			// Parse date from key: audit:{YYYY-MM-DD}:{timestamp}:{uuid}
+			const parts = key.name.split(":");
+			if (parts.length < 3) continue;
 
-	query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
-	params.push(limit, offset);
+			const keyDate = parts[1];
 
-	// Execute query
-	const result = await c.env.DB.prepare(query).bind(...params).all();
+			// Date filtering based on key
+			if (fromDate && keyDate < from!) continue;
+			if (toDate && keyDate > to!) continue;
 
-	// Get total count for pagination
-	let countQuery = "SELECT COUNT(*) as total FROM audit_log WHERE 1=1";
-	const countParams: (string | number)[] = [];
+			// Fetch the value
+			const value = await c.env.AUDIT_KV.get(key.name);
+			if (!value) continue;
 
-	if (customerId) {
-		countQuery += " AND customer_id = ?";
-		countParams.push(customerId);
-	}
+			const entry = JSON.parse(value) as AuditLogEntry;
 
-	if (statusCode) {
-		countQuery += " AND status_code = ?";
-		countParams.push(parseInt(statusCode, 10));
-	}
+			// Apply filters
+			if (customerId && entry.customerId !== customerId) continue;
+			if (statusCodeNum !== null && entry.statusCode !== statusCodeNum) continue;
 
-	if (from) {
-		countQuery += " AND timestamp >= ?";
-		countParams.push(from + " 00:00:00");
-	}
+			logs.push(entry);
 
-	if (to) {
-		countQuery += " AND timestamp <= ?";
-		countParams.push(to + " 23:59:59");
-	}
+			// Stop if we have enough
+			if (logs.length >= limit) break;
+		}
 
-	const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>();
+		cursor = listResult.list_complete ? undefined : listResult.cursor;
+	} while (cursor && logs.length < limit);
+
+	// Sort by timestamp descending (newest first)
+	logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
 	return c.json({
 		success: true,
-		logs: result.results,
-		pagination: {
-			total: countResult?.total || 0,
-			limit,
-			offset,
-			hasMore: offset + limit < (countResult?.total || 0),
-		},
+		logs: logs.slice(0, limit),
+		count: logs.length,
 	});
 };

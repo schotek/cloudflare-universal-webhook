@@ -1,11 +1,11 @@
 {
 	"name": "cloudflare-universal-webhook",
-	"description": "Universal webhook receiver using Hono + D1 + R2.",
+	"description": "Universal webhook receiver using Hono + KV + R2.",
 	"cloudflare": {
 		"label": "Universal Webhook API",
 		"products": [
 			"Workers",
-			"D1",
+			"KV",
 			"R2"
 		],
 		"categories": [
@@ -27,8 +27,6 @@
 	"scripts": {
 		"cf-typegen": "wrangler types",
 		"deploy": "wrangler deploy",
-		"dev": "npm run seedLocalDb && wrangler dev",
-		"predeploy": "wrangler d1 migrations apply DB --remote",
-		"seedLocalDb": "wrangler d1 migrations apply DB --local"
+		"dev": "wrangler dev"
 	}
 }

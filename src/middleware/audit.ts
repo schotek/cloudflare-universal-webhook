@@ -8,15 +8,30 @@ declare module "hono" {
 	}
 }
 
+// TTL for audit logs: 30 days in seconds
+const AUDIT_TTL = 30 * 24 * 60 * 60;
+
+/**
+ * Format date as YYYY-MM-DD
+ */
+function formatDate(date: Date): string {
+	return date.toISOString().split("T")[0];
+}
+
 /**
  * Audit logging middleware
- * Logs all requests to D1 database
+ * Logs all requests to KV store (except audit endpoint itself)
  */
 export const auditMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
 	const start = Date.now();
 
 	// Execute the request
 	await next();
+
+	// Skip logging for audit endpoint to avoid recursion/noise
+	if (c.req.path === "/manage/audit") {
+		return;
+	}
 
 	const duration = Date.now() - start;
 
@@ -44,39 +59,33 @@ export const auditMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, n
 	const webhookId = c.get("auditWebhookId") || null;
 	const errorMessage = c.get("auditErrorMessage") || null;
 
-	// Log to D1 in background (non-blocking) - response is sent immediately
+	// Build KV key: audit:{date}:{timestamp_ms}:{uuid}
+	const now = new Date();
+	const dateStr = formatDate(now);
+	const timestamp = now.getTime();
+	const uuid = crypto.randomUUID();
+	const key = `audit:${dateStr}:${timestamp}:${uuid}`;
+
+	// Build value
+	const value = {
+		method,
+		path,
+		statusCode,
+		customerId,
+		sourceIp,
+		userAgent,
+		contentType,
+		requestSize,
+		responseTimeMs: duration,
+		errorMessage,
+		webhookId,
+		timestamp: now.toISOString(),
+	};
+
+	// Log to KV in background (non-blocking) with TTL
 	c.executionCtx.waitUntil(
-		c.env.DB.prepare(
-			`INSERT INTO audit_log
-			(method, path, status_code, customer_id, source_ip, user_agent, content_type, request_size, response_time_ms, error_message, webhook_id)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		c.env.AUDIT_KV.put(key, JSON.stringify(value), { expirationTtl: AUDIT_TTL }).catch((error) =>
+			console.error("Audit logging failed:", error)
 		)
-			.bind(
-				method,
-				path,
-				statusCode,
-				customerId,
-				sourceIp,
-				userAgent,
-				contentType,
-				requestSize,
-				duration,
-				errorMessage,
-				webhookId
-			)
-			.run()
-			.catch((error) => console.error("Audit logging failed:", error))
 	);
 };
-
-/**
- * Cleanup old audit logs (called by scheduled worker)
- * Deletes logs older than 30 days
- */
-export async function cleanupAuditLogs(db: D1Database): Promise<number> {
-	const result = await db
-		.prepare("DELETE FROM audit_log WHERE timestamp < datetime('now', '-30 days')")
-		.run();
-
-	return result.meta.changes || 0;
-}

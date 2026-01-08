@@ -1,6 +1,7 @@
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { WebhookMetadata } from "../types";
+import customersData from "../data/customers.json";
 
 // Content-type to file extension mapping
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
@@ -16,6 +17,43 @@ const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
 
 // Valid webhook types
 const VALID_TYPES = ["esl"] as const;
+
+// Content-type to data_format mapping
+const CONTENT_TYPE_TO_FORMAT: Record<string, string> = {
+	"text/csv": "csv",
+	"text/plain": "text",
+	"application/json": "json",
+	"application/xml": "xml",
+	"text/xml": "xml",
+};
+
+type Customer = (typeof customersData.customers)[number];
+
+/**
+ * Find customer by ID or by outlet ID
+ */
+function findCustomerByIdOrOutlet(customerId: string): Customer | undefined {
+	// Search directly by ID
+	const customer = customersData.customers.find((c) => c.id === customerId);
+	if (customer) return customer;
+
+	// Search in outlets
+	return customersData.customers.find((c) => c.outlets?.includes(customerId));
+}
+
+/**
+ * Check if the content type is allowed for the customer's data_format
+ */
+function isDataFormatAllowed(customer: Customer, contentType: string | undefined): boolean {
+	if (customer.data_format === "all") return true;
+
+	if (!contentType) return false;
+
+	const baseType = contentType.split(";")[0].trim().toLowerCase();
+	const format = CONTENT_TYPE_TO_FORMAT[baseType];
+
+	return format === customer.data_format;
+}
 
 /**
  * Determines file extension from content-type header
@@ -65,6 +103,20 @@ export const handleWebhook = async (c: Context<{ Bindings: Env }>) => {
 		});
 	}
 
+	// Find customer configuration
+	const customer = findCustomerByIdOrOutlet(customer_id);
+	if (!customer) {
+		throw new HTTPException(404, { message: "Unknown customer or outlet" });
+	}
+
+	// Validate data format
+	const contentType = c.req.header("Content-Type");
+	if (!isDataFormatAllowed(customer, contentType)) {
+		throw new HTTPException(415, {
+			message: `Unsupported content type. This customer only accepts: ${customer.data_format}`,
+		});
+	}
+
 	// Get raw body as ArrayBuffer to handle any content type
 	const rawBody = await c.req.arrayBuffer();
 
@@ -75,7 +127,6 @@ export const handleWebhook = async (c: Context<{ Bindings: Env }>) => {
 	// Generate webhook ID and storage path
 	const webhookId = crypto.randomUUID();
 	const dateFolder = formatDate(new Date());
-	const contentType = c.req.header("Content-Type");
 	const extension = getExtensionFromContentType(contentType);
 
 	// R2 path: /{type}/{customer_id}/{YYYY-MM-DD}/{uuid}.{ext}

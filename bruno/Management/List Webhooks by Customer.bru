@@ -1,0 +1,20 @@
+meta {
+  name: List Webhooks by Customer
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{BASE_URL}}/manage/webhooks?type=esl&customer_id={{CUSTOMER_ID}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{S2S_TOKEN}}
+}
+
+params:query {
+  type: esl
+  customer_id: {{CUSTOMER_ID}}
+}

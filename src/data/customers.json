@@ -5,6 +5,7 @@
       "name": "Test Customer",
       "description": "Testovací zákazník pro vývoj",
       "active": true,
+      "data_format": "all",
       "outlets": []
     },
     {
@@ -12,6 +13,7 @@
       "name": "MPL",
       "description": "MPL s.r.o.",
       "active": true,
+      "data_format": "csv",
       "outlets": ["mpl-zlin"]
     }
   ]

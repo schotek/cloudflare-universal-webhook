@@ -44,9 +44,9 @@ export const auditMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, n
 	const webhookId = c.get("auditWebhookId") || null;
 	const errorMessage = c.get("auditErrorMessage") || null;
 
-	// Log to D1 (non-blocking)
-	try {
-		await c.env.DB.prepare(
+	// Log to D1 in background (non-blocking) - response is sent immediately
+	c.executionCtx.waitUntil(
+		c.env.DB.prepare(
 			`INSERT INTO audit_log
 			(method, path, status_code, customer_id, source_ip, user_agent, content_type, request_size, response_time_ms, error_message, webhook_id)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -64,11 +64,9 @@ export const auditMiddleware: MiddlewareHandler<{ Bindings: Env }> = async (c, n
 				errorMessage,
 				webhookId
 			)
-			.run();
-	} catch (error) {
-		// Don't fail the request if audit logging fails
-		console.error("Audit logging failed:", error);
-	}
+			.run()
+			.catch((error) => console.error("Audit logging failed:", error))
+	);
 };
 
 /**

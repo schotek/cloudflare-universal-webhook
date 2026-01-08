@@ -38,7 +38,7 @@ function findCustomerByIdOrOutlet(customerId: string): Customer | undefined {
 	if (customer) return customer;
 
 	// Search in outlets
-	return customersData.customers.find((c) => c.outlets?.includes(customerId));
+	return customersData.customers.find((c) => (c.outlets as string[])?.includes(customerId));
 }
 
 /**

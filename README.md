@@ -1,72 +1,109 @@
-# OpenAPI Template
+# Universal Webhook Receiver
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/chanfana-openapi-template)
+Cloudflare Worker pro univerzální příjem a ukládání webhooků s podporou více zákazníků, audit logováním a management API.
 
-![OpenAPI Template Preview](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/91076b39-1f5b-46f6-7f14-536a6f183000/public)
+## Funkce
 
-<!-- dash-content-start -->
+- **Příjem webhooků** - `POST /webhook/:type/:customer_id`
+- **Ukládání do R2** - Payloady organizované podle typu/zákazníka/data
+- **Audit logování** - Do KV (30 dnů TTL) a Turso databáze
+- **IP validace** - Volitelné omezení na povolené IP adresy
+- **Token autentizace** - Per-customer tokeny pro webhook endpoint
+- **S2S autentizace** - Server-to-server token pro management API
+- **Management API** - Listování, stahování a mazání webhooků
+- **Plánovaný cleanup** - Automatické mazání starých audit logů (cron)
 
-This is a Cloudflare Worker with OpenAPI 3.1 Auto Generation and Validation using [chanfana](https://github.com/cloudflare/chanfana) and [Hono](https://github.com/honojs/hono).
+## Technologie
 
-This is an example project made to be used as a quick start into building OpenAPI compliant Workers that generates the
-`openapi.json` schema automatically from code and validates the incoming request to the defined parameters or request body.
+- [Cloudflare Workers](https://workers.cloudflare.com/)
+- [Hono](https://hono.dev/) - Web framework
+- [R2](https://developers.cloudflare.com/r2/) - Object storage pro payloady
+- [KV](https://developers.cloudflare.com/kv/) - Audit logy s TTL
+- [Turso](https://turso.tech/) - SQLite databáze pro audit logy
 
-This template includes various endpoints, a D1 database, and integration tests using [Vitest](https://vitest.dev/) as examples. In endpoints, you will find [chanfana D1 AutoEndpoints](https://chanfana.com/endpoints/auto/d1) and a [normal endpoint](https://chanfana.com/endpoints/defining-endpoints) to serve as examples for your projects.
+## API Endpointy
 
-Besides being able to see the OpenAPI schema (openapi.json) in the browser, you can also extract the schema locally no hassle by running this command `npm run schema`.
+### Webhook
+```
+POST /webhook/:type/:customer_id
+```
+Přijímá webhook payload a ukládá do R2. Podporované typy: `esl`.
 
-<!-- dash-content-end -->
-
-> [!IMPORTANT]
-> When using C3 to create this project, select "no" when it asks if you want to deploy. You need to follow this project's [setup steps](https://github.com/cloudflare/templates/tree/main/openapi-template#setup-steps) before deploying.
-
-## Getting Started
-
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/openapi-template
+### Management (vyžaduje S2S token)
+```
+GET  /manage/customers                 # Seznam zákazníků
+GET  /manage/webhooks                  # Seznam webhooků
+GET  /manage/webhooks/:webhookId       # Stažení payloadu
+DELETE /manage/webhooks/:webhookId     # Smazání webhooku
+GET  /manage/audit                     # Audit logy
 ```
 
-A live public deployment of this template is available at [https://openapi-template.templates.workers.dev](https://openapi-template.templates.workers.dev)
+## Setup
 
-## Setup Steps
-
-1. Install the project dependencies with a package manager of your choice:
+1. Nainstaluj závislosti:
    ```bash
    npm install
    ```
-2. Create a [D1 database](https://developers.cloudflare.com/d1/get-started/) with the name "openapi-template-db":
+
+2. Vytvoř KV namespace:
    ```bash
-   npx wrangler d1 create openapi-template-db
+   npx wrangler kv:namespace create AUDIT_KV
    ```
-   ...and update the `database_id` field in `wrangler.json` with the new database ID.
-3. Run the following db migration to initialize the database (notice the `migrations` directory in this project):
+   Aktualizuj `id` v `wrangler.jsonc`.
+
+3. Vytvoř R2 bucket:
    ```bash
-   npx wrangler d1 migrations apply DB --remote
-   ```
-4. Deploy the project!
-   ```bash
-   npx wrangler deploy
-   ```
-5. Monitor your worker
-   ```bash
-   npx wrangler tail
+   npx wrangler r2 bucket create webhook-payloads
    ```
 
-## Testing
+4. Nastav secrets:
+   ```bash
+   npx wrangler secret put S2S_TOKEN
+   npx wrangler secret put CUSTOMER_TOKENS
+   npx wrangler secret put TURSO_AUTH_TOKEN
+   ```
 
-This template includes integration tests using [Vitest](https://vitest.dev/). To run the tests locally:
+5. Deploy:
+   ```bash
+   npm run deploy
+   ```
 
-```bash
-npm run test
+## Konfigurace
+
+### Environment Variables (wrangler.jsonc)
+- `ALLOWED_IPS` - Čárkou oddělené povolené IP (prázdné = všechny)
+- `TURSO_DATABASE_URL` - URL Turso databáze
+
+### Secrets
+- `S2S_TOKEN` - Token pro management API
+- `CUSTOMER_TOKENS` - JSON objekt `{"customer-id": "token"}`
+- `TURSO_AUTH_TOKEN` - Auth token pro Turso
+
+### Zákazníci (src/data/customers.json)
+Konfigurace zákazníků včetně povolených formátů dat, outletů a ESL párování.
+
+## Struktura projektu
+
+```
+src/
+├── index.ts              # Hlavní router a scheduled handler
+├── types.ts              # TypeScript typy
+├── data/
+│   └── customers.json    # Konfigurace zákazníků
+├── endpoints/
+│   ├── webhook.ts        # Příjem webhooků
+│   └── webhookManagement.ts  # Management API
+├── lib/
+│   └── turso.ts          # Turso klient
+└── middleware/
+    ├── auth.ts           # IP a token autentizace
+    └── audit.ts          # Audit logging middleware
 ```
 
-Test files are located in the `tests/` directory, with examples demonstrating how to test your endpoints and database interactions.
+## R2 Storage Struktura
 
-## Project structure
+```
+/{type}/{customer_id}/{YYYY-MM-DD}/{uuid}.{ext}
+```
 
-1. Your main router is defined in `src/index.ts`.
-2. Each endpoint has its own file in `src/endpoints/`.
-3. Integration tests are located in the `tests/` directory.
-4. For more information read the [chanfana documentation](https://chanfana.com/), [Hono documentation](https://hono.dev/docs), and [Vitest documentation](https://vitest.dev/guide/).
+Příklad: `esl/mpl-zlin/2025-01-08/550e8400-e29b-41d4-a716-446655440000.csv`

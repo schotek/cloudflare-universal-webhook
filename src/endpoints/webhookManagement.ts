@@ -1,5 +1,6 @@
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import customersData from "../data/customers.json";
 
 // Valid webhook types
 const VALID_TYPES = ["esl"] as const;
@@ -177,5 +178,16 @@ export const deleteWebhook = async (c: Context<{ Bindings: Env }>) => {
 		success: true,
 		message: "Webhook deleted successfully",
 		webhookId,
+	});
+};
+
+/**
+ * List customers
+ * GET /manage/customers
+ */
+export const listCustomers = async (c: Context<{ Bindings: Env }>) => {
+	return c.json({
+		success: true,
+		...customersData,
 	});
 };

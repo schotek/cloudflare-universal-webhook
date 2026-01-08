@@ -5,17 +5,17 @@ meta {
 }
 
 post {
-  url: {{BASE_URL}}/webhook/esl/customer-123
+  url: {{BASE_URL}}/webhook/esl/{{CUSTOMER_ID}}
   body: text
   auth: bearer
 }
 
-auth:bearer {
-  token: {{API_TOKEN}}
-}
-
 headers {
   Content-Type: text/plain
+}
+
+auth:bearer {
+  token: {{API_TOKEN}}
 }
 
 body:text {

@@ -1,0 +1,15 @@
+meta {
+  name: List Customers
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{BASE_URL}}/manage/customers
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{S2S_TOKEN}}
+}

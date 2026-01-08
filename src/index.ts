@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ipValidation, tokenAuthentication, s2sAuthentication } from "./middleware/auth";
 import { handleWebhook } from "./endpoints/webhook";
-import { listWebhooks, downloadWebhook, deleteWebhook } from "./endpoints/webhookManagement";
+import { listWebhooks, downloadWebhook, deleteWebhook, listCustomers } from "./endpoints/webhookManagement";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -38,6 +38,7 @@ app.get("/", (c) => {
 app.post("/webhook/:type/:customer_id", ipValidation, tokenAuthentication, handleWebhook);
 
 // Management routes with middleware
+app.get("/manage/customers", s2sAuthentication, listCustomers);
 app.get("/manage/webhooks", s2sAuthentication, listWebhooks);
 app.get("/manage/webhooks/:webhookId", s2sAuthentication, downloadWebhook);
 app.delete("/manage/webhooks/:webhookId", s2sAuthentication, deleteWebhook);

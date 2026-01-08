@@ -1,0 +1,18 @@
+{
+  "customers": [
+    {
+      "id": "customer-123",
+      "name": "Test Customer",
+      "description": "Testovací zákazník pro vývoj",
+      "active": true,
+      "outlets": []
+    },
+    {
+      "id": "mpl",
+      "name": "MPL",
+      "description": "MPL s.r.o.",
+      "active": true,
+      "outlets": ["mpl-zlin"]
+    }
+  ]
+}

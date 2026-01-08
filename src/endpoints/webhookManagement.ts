@@ -174,6 +174,21 @@ export const deleteWebhook = async (c: Context<{ Bindings: Env }>) => {
 
 	await c.env.WEBHOOK_BUCKET.delete(key);
 
+	// Log deletion to delete_log table (non-blocking)
+	const sourceIp =
+		c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || null;
+	const userAgent = c.req.header("User-Agent") || null;
+
+	c.executionCtx.waitUntil(
+		c.env.DB.prepare(
+			`INSERT INTO delete_log (webhook_id, deleted_key, source_ip, user_agent)
+			 VALUES (?, ?, ?, ?)`
+		)
+			.bind(webhookId, key, sourceIp, userAgent)
+			.run()
+			.catch((error) => console.error("Delete logging failed:", error))
+	);
+
 	return c.json({
 		success: true,
 		message: "Webhook deleted successfully",
